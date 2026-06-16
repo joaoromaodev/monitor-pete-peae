@@ -1,8 +1,27 @@
 # Monitor PETE/PEAE — SAPF/SEDUC-PA
 
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-razão-003B57?logo=sqlite&logoColor=white)
+![Selenium](https://img.shields.io/badge/Selenium-bot%20SIAFE-43B02A?logo=selenium&logoColor=white)
+![Google Sheets](https://img.shields.io/badge/Google%20Sheets-sync-0F9D58?logo=googlesheets&logoColor=white)
+![Status](https://img.shields.io/badge/status-em%20produção-0071CE)
+
 Acompanhamento **diário** de parcelas pagas às prefeituras nos programas estaduais
 **PETE** (transporte escolar) e **PEAE** (alimentação escolar). Sistema irmão do de
-Diárias. Substitui as duas planilhas Google + AppScripts por um app local.
+Diárias. Substitui duas planilhas Google + AppScripts por um app local que vai do
+relatório bruto do SIAFE até o aviso de WhatsApp e os PDFs enviados à Secretária.
+
+## Demonstração
+> Imagens geradas a partir de **dados fictícios** (`exemplos/`). Nenhum dado real.
+
+**Dashboard PDF (grade município × parcelas, acumulado do ano):**
+
+![Dashboard PETE](docs/dashboard_pete.png)
+
+**Mensagem de WhatsApp (parcelas do dia):**
+
+![WhatsApp](docs/whatsapp.png)
 
 ## O que faz
 1. **Upload** do Relatório de Ordem Bancária do dia (SIAFE, evento 700414).
@@ -41,6 +60,11 @@ Depois, no app, aba **Configurações → Recarregar razão inicial** → envie
 **aleatórios**; só a lista de municípios/CNPJ (pública) é real. O conjunto já
 inclui exemplos de **complemento**, **anomalia** (2 OBs na mesma parcela) e
 **OB anulada** (descartada), para exercitar os recursos.
+
+As imagens da seção *Demonstração* são reprodutíveis com:
+```
+python exemplos/gerar_imagens_demo.py     # gera docs/dashboard_pete.png e docs/whatsapp.png
+```
 
 ## Arquitetura (preparada p/ migrar ao SIMF)
 - `core/` — regra de negócio, **Python puro, sem Streamlit** (vira API/JS no SIMF).

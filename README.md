@@ -28,8 +28,19 @@ O bot é **provisório**: quando a SEFA liberar acesso ao PostgreSQL do SIAFE, a
 captura vira uma query SQL (ver `store/fonte_descricao.py`) e o bot sai.
 
 ## Primeiro uso
-Aba **Razão / Configurações → Importar seed**: envie o export
+Aba **Configurações → Recarregar razão inicial (seed)**: envie o export
 `MONITORAMENTO PETE/PEAE 2026 - Página2.csv` para carregar o histórico do ano.
+
+## Demo com dados fictícios (para testar/portfólio)
+O repositório **não** contém dados reais. Para rodar uma demonstração:
+```
+python exemplos/gerar_dados_fake.py        # gera exemplos/seed_exemplo.csv
+```
+Depois, no app, aba **Configurações → Recarregar razão inicial** → envie
+`exemplos/seed_exemplo.csv`. Todos os valores, OBs, processos e datas são
+**aleatórios**; só a lista de municípios/CNPJ (pública) é real. O conjunto já
+inclui exemplos de **complemento**, **anomalia** (2 OBs na mesma parcela) e
+**OB anulada** (descartada), para exercitar os recursos.
 
 ## Arquitetura (preparada p/ migrar ao SIMF)
 - `core/` — regra de negócio, **Python puro, sem Streamlit** (vira API/JS no SIMF).

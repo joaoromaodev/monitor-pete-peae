@@ -1,0 +1,32 @@
+# credenciais e segredos (NUNCA versionar)
+secrets/
+# cobre a chave do Google e o data/gsheet.json
+*.json
+
+# dados reais (governo)
+*.db
+*.sqlite
+# temporarios e previews
+data/_*
+data/*.pdf
+
+# municipios.csv (publico) PODE ir - nao e ignorado.
+
+# binarios / execucao
+*.exe
+
+# arquivos gerados
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

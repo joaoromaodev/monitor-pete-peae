@@ -1,0 +1,11 @@
+# Força o tema CLARO em todos os widgets (inputs, checkbox, dataframe), para não
+# herdar o tema escuro do sistema. As cores seguem o Design System SEDUC-PA.
+[theme]
+base = "light"
+primaryColor = "#0071CE"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6F8"
+textColor = "#161C24"
+
+[browser]
+gatherUsageStats = false

@@ -201,6 +201,7 @@ def resetar_processamento():
     st.session_state.registros_novos = []
     st.session_state.obs_novas = []
     st.session_state.descricoes = {}
+    st.session_state.descricoes_parciais = {}
     for p in (OBS_PATH, STATUS_PATH):
         try:
             p.unlink()
@@ -315,7 +316,24 @@ with aba_proc:
         n = len(st.session_state.obs_novas)
         st.markdown(f'<div class="base-info">{n} OBs novas serão consultadas no SIAFE.</div>',
                     unsafe_allow_html=True)
-        st.caption("Credenciais do SIAFE — usadas só nesta execução, **nunca gravadas em disco**.")
+
+        # recuperação: se já há captura salva (ex.: depois de um F5/queda), retoma SEM bot
+        _salvo = ler_status_bot()
+        _cap = [r for r in (_salvo or {}).get("resultados", []) if r.get("descricao")]
+        if _cap:
+            st.success(f"💾 Encontrei **{len(_cap)} descrições já capturadas** em disco "
+                       f"(da última busca). Você pode retomar sem rodar o bot de novo.")
+            if st.button("↩ Retomar com as descrições já capturadas (sem bot)",
+                         type="primary", use_container_width=True):
+                st.session_state.descricoes = {r["ob"]: r.get("descricao", "")
+                                               for r in _salvo["resultados"]}
+                st.session_state.descricoes_parciais = {}
+                st.session_state.etapa = "revisao"
+                st.rerun()
+            st.markdown("---")
+
+        st.caption("Ou rode o bot novamente. Credenciais do SIAFE — usadas só nesta "
+                   "execução, **nunca gravadas em disco**.")
 
         # checa a VPN/SIAFE só quando o usuário pedir (evita travar a cada rerun)
         if st.button("Testar conexão com o SIAFE (VPN)"):
@@ -338,6 +356,10 @@ with aba_proc:
                 OBS_PATH.write_text(json.dumps(st.session_state.obs_novas, ensure_ascii=False), encoding="utf-8")
                 if STATUS_PATH.exists():
                     STATUS_PATH.unlink()
+                st.session_state.descricoes_parciais = {}   # execução nova, do zero
+                # guarda credenciais em chave estável (sobrevive à troca de etapa)
+                st.session_state._siafe_user = u
+                st.session_state._siafe_pass = p
                 env = dict(os.environ); env["SIAFE_USER"] = u; env["SIAFE_PASS"] = p
                 subprocess.Popen([sys.executable, str(BOT_PATH), str(OBS_PATH), str(STATUS_PATH)],
                                  env=env, cwd=str(BOT_PATH.parent))
@@ -352,9 +374,23 @@ with aba_proc:
                 "navigating": "Navegando até a consulta de OB…", "processing": "Consultando OBs…",
                 "done": "Concluído!", "error": "Erro."}
         estado = (status or {}).get("state", "")
+
+        # mescla o que já foi capturado antes (retomadas) com o status atual,
+        # para nunca perder progresso se o Chrome fechar no meio.
+        atuais = dict(st.session_state.get("descricoes_parciais", {}))
+        for it in (status or {}).get("resultados", []):
+            if it.get("descricao"):
+                atuais[it["ob"]] = it["descricao"]
+            else:
+                atuais.setdefault(it["ob"], "")
+        capturadas = sum(1 for ob in st.session_state.obs_novas if atuais.get(ob))
+        faltantes = [ob for ob in st.session_state.obs_novas if not atuais.get(ob)]
+        em_proc = estado in ("starting", "logging_in", "navigating", "processing")
+
         if status:
-            st.markdown(f'<div class="base-info">Status: <strong>{mapa.get(estado, estado)}</strong></div>',
-                        unsafe_allow_html=True)
+            st.markdown(f'<div class="base-info">Status: <strong>{mapa.get(estado, estado)}</strong>'
+                        f' &nbsp;·&nbsp; {capturadas}/{len(st.session_state.obs_novas)} '
+                        f'com descrição</div>', unsafe_allow_html=True)
             tot, proc = status.get("total", 0), status.get("processed", 0)
             if tot:
                 st.progress(min(proc / tot, 1.0), text=f"{proc} / {tot} OBs")
@@ -365,15 +401,45 @@ with aba_proc:
         st.markdown('<p class="section-title">Console</p>', unsafe_allow_html=True)
         render_console((status or {}).get("logs", []))
 
+        # se o bot parou (concluído/erro/Chrome fechado) e faltam OBs, oferece retomar
+        if faltantes and not em_proc:
+            st.warning(f"⚠️ {len(faltantes)} OB(s) ficaram sem descrição "
+                       f"(de {len(st.session_state.obs_novas)}). As {capturadas} já "
+                       f"capturadas estão salvas — você pode **retomar só as faltantes** "
+                       f"(não refaz o que já deu certo) ou carregar e preencher à mão.")
+            cred_ok = bool(st.session_state.get("_siafe_user") and st.session_state.get("_siafe_pass"))
+            if st.button(f"↻ Retomar as {len(faltantes)} faltantes", type="primary",
+                         use_container_width=True, disabled=not (cred_ok and BOT_DISPONIVEL)):
+                try:
+                    st.session_state.descricoes_parciais = atuais   # preserva o capturado
+                    OBS_PATH.write_text(json.dumps(faltantes, ensure_ascii=False), encoding="utf-8")
+                    if STATUS_PATH.exists():
+                        STATUS_PATH.unlink()
+                    env = dict(os.environ)
+                    env["SIAFE_USER"] = st.session_state.get("_siafe_user", "")
+                    env["SIAFE_PASS"] = st.session_state.get("_siafe_pass", "")
+                    subprocess.Popen([sys.executable, str(BOT_PATH), str(OBS_PATH), str(STATUS_PATH)],
+                                     env=env, cwd=str(BOT_PATH.parent))
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao retomar: {e}")
+            if not cred_ok:
+                st.caption("Para retomar, volte e informe as credenciais (Recomeçar).")
+
         c1, c2 = st.columns(2)
         if c1.button("Atualizar", use_container_width=True):
             st.rerun()
-        if c2.button("Carregar resultados →", type="primary", use_container_width=True,
-                     disabled=estado != "done"):
-            st.session_state.descricoes = {it["ob"]: it.get("descricao", "")
-                                           for it in status.get("resultados", [])}
+        # carregar funciona com PARCIAL: o que faltar vira preenchimento manual na revisão
+        rotulo = ("Carregar resultados →" if not faltantes
+                  else f"Carregar {capturadas} e preencher {len(faltantes)} à mão →")
+        if c2.button(rotulo, type="primary", use_container_width=True,
+                     disabled=capturadas == 0):
+            st.session_state.descricoes = atuais
+            st.session_state.descricoes_parciais = {}
             st.session_state.etapa = "revisao"; st.rerun()
-        if estado not in ("done", "error"):
+
+        # auto-atualiza só enquanto o bot está realmente rodando
+        if em_proc:
             st.caption("Atualizando automaticamente a cada 2s…")
             time.sleep(2); st.rerun()
 
@@ -417,40 +483,41 @@ with aba_proc:
                  for ob in st.session_state.obs_novas]
         lancs = definir_tipos(lancs, razao.chaves_normais())
 
-        # três grupos (o CNPJ é a salvaguarda contra descrição digitada errada):
+        # Classificação simples — NÃO bloqueia o avanço:
         #  • válidos   → descrição lida como PETE/PEAE (programa + parcela) → vão ao razão
-        #  • descartar → NÃO é prefeitura conhecida E não menciona PETE/PEAE → outro pagamento
-        #  • corrigir  → É prefeitura conhecida (ou menciona PETE/PEAE) mas não parseou →
-        #                provável erro de digitação ("PEE", "PETAE", parcela faltando) → bloqueia
-        def _ok(l):  # parseou direito
+        #  • descartar → tudo o mais (outro tipo de pagamento) → não vai ao razão
+        # Aviso (não-bloqueante): se uma PREFEITURA cair no descarte, pode ser erro de
+        # digitação — você confere e ajusta a descrição se quiser, mas a decisão é sua
+        # (prefeitura também recebe pagamentos que não são PETE/PEAE).
+        def _ok(l):
             return bool(l["programa"]) and l["parcela"] is not None
-        def _pref(l):  # credor é prefeitura conhecida (CNPJ no dicionário)
+        def _pref(l):
             return bool(dic.nome_por_cnpj(l["cnpj"]))
 
         validos = [l for l in lancs if _ok(l)]
-        corrigir = [l for l in lancs if not _ok(l) and (_pref(l) or eh_pete_peae(l["descricao"]))]
-        descartar = [l for l in lancs if not _ok(l) and not _pref(l) and not eh_pete_peae(l["descricao"])]
+        descartar = [l for l in lancs if not _ok(l)]
+        pref_descartadas = [l for l in descartar if _pref(l)]
         anomalias = [l for l in validos if l["tipo"] == "EXTRA"]
 
         st.markdown("---")
         c1, c2, c3 = st.columns(3)
         c1.metric("Serão lançadas", len(validos))
-        c2.metric("Descartadas", len(descartar), help="não são PETE nem PEAE — não vão ao razão")
-        c3.metric("Corrigir descrição", len(corrigir))
+        c2.metric("Descartadas", len(descartar), help="não são PETE/PEAE — não vão ao razão")
+        c3.metric("Anomalias", len(anomalias))
         if anomalias:
             st.warning("⚠️ 2ª OB normal na mesma parcela (conferir com a equipe de pagamento): "
                        + ", ".join(f"{a['municipio']} {a['programa']} p{a['parcela']}" for a in anomalias))
+        if pref_descartadas:
+            itens = "; ".join(f"{l['ob']} ({l['municipio'] or l['credor'][:25]})"
+                              for l in pref_descartadas)
+            st.warning("ℹ️ Estas OBs de **prefeitura** não foram reconhecidas como PETE/PEAE e "
+                       "serão **descartadas**. Se for erro de digitação (ex.: “PEE”/“PETAE”), "
+                       "ajuste a descrição acima; senão, pode confirmar normalmente: " + itens)
         if descartar:
-            st.caption("Descartadas (não vão ao razão): "
-                       + ", ".join(f"{l['ob']}" for l in descartar))
-        if corrigir:
-            itens = "; ".join(f"{l['ob']} ({l['municipio'] or l['credor'][:25]})" for l in corrigir)
-            st.error("Descrição não reconhecida (parcela faltando ou erro de digitação tipo "
-                     "“PEE”/“PETAE”). Como o credor é prefeitura, **não pode ser descartada** — "
-                     "ajuste para o padrão `Nª PARCELA DO PETE/2026` (ou PEAE): " + itens)
+            st.caption(f"{len(descartar)} descartada(s) (não vão ao razão): "
+                       + ", ".join(l["ob"] for l in descartar))
 
-        if st.button("Confirmar e anexar ao razão", type="primary", use_container_width=True,
-                     disabled=bool(corrigir)):
+        if st.button("Confirmar e anexar ao razão", type="primary", use_container_width=True):
             gravados = razao.upsert(validos)
             msg = f"{gravados} lançamento(s) anexado(s) ao razão."
             if descartar:

@@ -118,6 +118,24 @@ class Razao:
         sql += " ORDER BY programa, municipio, parcela"
         return [dict(r) for r in self.con.execute(sql, args)]
 
+    def municipios_distintos(self, programa: str | None = None) -> list[str]:
+        sql = "SELECT DISTINCT municipio FROM lancamentos WHERE municipio <> ''"
+        args = []
+        if programa:
+            sql += " AND programa = ?"
+            args.append(programa)
+        sql += " ORDER BY municipio"
+        return [r[0] for r in self.con.execute(sql, args)]
+
+    def por_municipio(self, municipio: str, programa: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM lancamentos WHERE municipio = ?"
+        args = [municipio]
+        if programa:
+            sql += " AND programa = ?"
+            args.append(programa)
+        sql += " ORDER BY programa, parcela, tipo"
+        return [dict(r) for r in self.con.execute(sql, args)]
+
     def datas_disponiveis(self) -> list[str]:
         """Datas (ISO) com lançamentos, mais recente primeiro."""
         rows = self.con.execute(

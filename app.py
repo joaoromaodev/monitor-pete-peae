@@ -259,8 +259,9 @@ st.markdown(f"""
   <span class="app-header-badge">DPPC</span>
 </div><div class="app-stripe"></div>""", unsafe_allow_html=True)
 
-aba_proc, aba_rel, aba_razao, aba_cfg = st.tabs(
-    ["Processamento do dia", "Relatórios", "Razão", "Configurações"])
+aba_proc, aba_rel, aba_dash, aba_mun, aba_razao, aba_cfg = st.tabs(
+    ["Processamento do dia", "Relatórios", "Dashboard", "Por município",
+     "Razão", "Configurações"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — PROCESSAMENTO DO DIA
@@ -503,6 +504,85 @@ with aba_rel:
                     col.download_button(f"Baixar PDF {prog}", data=gerar_pdf(grade, prog),
                         file_name=f"Relatorio {prog} {ts}.pdf", mime="application/pdf",
                         use_container_width=True, type="primary", key=f"pdf_{prog}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA — DASHBOARD (interativo por programa)
+# ══════════════════════════════════════════════════════════════════════════════
+with aba_dash:
+    if razao.total() == 0:
+        st.warning("Razão vazio. Importe dados na aba Configurações.")
+    else:
+        prog = st.radio("Programa", ["PETE", "PEAE"], horizontal=True, key="dash_prog")
+        emoji = "🚌" if prog == "PETE" else "🍎"
+        grade = grade_consolidada(razao.listar(prog))
+        cols_meta = grade["colunas"]            # [(key, rotulo)]
+        parcs = [k[1] for (k, _r) in cols_meta if isinstance(k, tuple) and k[0] == "P"]
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric(f"{emoji} Total pago — {prog}", brl(grade["total_geral"]))
+        k2.metric("Municípios atendidos", len(grade["linhas"]))
+        k3.metric("Parcela mais recente", f"{max(parcs)}ª" if parcs else "—")
+
+        # gráfico: total por coluna (parcela / complemento)
+        totais = {rot: round(sum(l["valores"].get(key, 0.0) for l in grade["linhas"]), 2)
+                  for (key, rot) in cols_meta}
+        if totais:
+            st.markdown('<p class="section-title">Total por parcela</p>', unsafe_allow_html=True)
+            st.bar_chart(pd.DataFrame({"Total (R$)": totais}), color="#0071CE")
+
+        # grade município × parcela
+        st.markdown('<p class="section-title">Grade município × parcela</p>', unsafe_allow_html=True)
+        linhas_df = []
+        for l in grade["linhas"]:
+            row = {"MUNICÍPIO": l["municipio"]}
+            for (key, rot) in cols_meta:
+                v = l["valores"].get(key, 0.0)
+                row[rot] = brl(v) if v else "—"
+            row["TOTAL"] = brl(l["total"])
+            linhas_df.append(row)
+        st.dataframe(pd.DataFrame(linhas_df), use_container_width=True,
+                     hide_index=True, height=440)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA — POR MUNICÍPIO (detalhe filtrado)
+# ══════════════════════════════════════════════════════════════════════════════
+with aba_mun:
+    if razao.total() == 0:
+        st.warning("Razão vazio. Importe dados na aba Configurações.")
+    else:
+        muns = razao.municipios_distintos()
+        c1, c2 = st.columns([2, 1])
+        mun = c1.selectbox("Município", muns, key="mun_sel")
+        prog_op = c2.radio("Programa", ["Ambos", "PETE", "PEAE"], key="mun_prog")
+        prog_f = None if prog_op == "Ambos" else prog_op
+
+        rows = razao.por_municipio(mun, prog_f)
+        if not rows:
+            st.info("Sem lançamentos para este filtro.")
+        else:
+            # resumo por programa
+            for pg in (["PETE", "PEAE"] if prog_f is None else [prog_f]):
+                rp = [r for r in rows if r["programa"] == pg]
+                if not rp:
+                    continue
+                total = sum(r["valor"] or 0 for r in rp)
+                parcelas = sorted({r["parcela"] for r in rp if r["tipo"] == "NORMAL"})
+                em = "🚌" if pg == "PETE" else "🍎"
+                st.markdown(
+                    f'<div class="base-info">{em} <strong>{pg}</strong> — total '
+                    f'{brl(total)} · parcelas pagas: '
+                    f'{", ".join(f"{p}ª" for p in parcelas) or "—"}</div>',
+                    unsafe_allow_html=True)
+
+            st.markdown('<p class="section-title">Lançamentos</p>', unsafe_allow_html=True)
+            df = pd.DataFrame([{
+                "DATA": data_br(r["data_pagamento"]), "PROG": r["programa"],
+                "PARC": r["parcela"], "TIPO": r["tipo"], "VALOR": brl(r["valor"]),
+                "OB": r["ob"], "STATUS": r["status_ob"], "DESCRIÇÃO": r["descricao"],
+            } for r in rows])
+            st.dataframe(df, use_container_width=True, hide_index=True, height=360)
+            st.caption(f"{len(rows)} lançamento(s) · total "
+                       f"{brl(sum(r['valor'] or 0 for r in rows))}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 3 — RAZÃO (visualização)

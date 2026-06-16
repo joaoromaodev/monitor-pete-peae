@@ -15,6 +15,10 @@ relatório bruto do SIAFE até o aviso de WhatsApp e os PDFs enviados à Secret�
 ## Demonstração
 > Imagens geradas a partir de **dados fictícios** (`exemplos/`). Nenhum dado real.
 
+**Dashboard interativo (KPIs + total por parcela, filtrável por programa):**
+
+![Dashboard](docs/dashboard_app.png)
+
 **Dashboard PDF (grade município × parcelas, acumulado do ano):**
 
 ![Dashboard PETE](docs/dashboard_pete.png)
@@ -32,6 +36,9 @@ relatório bruto do SIAFE até o aviso de WhatsApp e os PDFs enviados à Secret�
    parcela → conferir com a equipe de pagamento; o sistema antigo somava escondendo).
 5. **Relatórios**: texto de WhatsApp do dia + 2 PDFs (grade município × parcelas,
    acumulado do ano), um por programa.
+6. **Dashboard interativo** por programa (KPIs + total por parcela + grade) e
+   visão **por município** (detalhe filtrado por município e programa).
+7. **Sync opcional** com Google Sheets (planilha de carga) — manual ou automático.
 
 ## Como rodar
 ```
